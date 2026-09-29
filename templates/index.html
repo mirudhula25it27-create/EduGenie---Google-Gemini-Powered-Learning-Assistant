@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduGenie — AI Learning Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <div class="logo">E</div>
+      <div>
+        <h1>EduGenie</h1>
+        <p>Google Gemini Powered Learning Assistant</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <label for="task">Choose a learning task</label>
+      <select id="task">
+        <option value="qa">Ask a Question</option>
+        <option value="explain">Explain a Topic</option>
+        <option value="quiz">Generate Quiz</option>
+        <option value="summarize">Summarize</option>
+        <option value="learn">Recommend Learning Path</option>
+      </select>
+
+      <label for="inputText" id="inputLabel">Your question</label>
+      <textarea id="inputText" rows="9" placeholder="Ask anything you want to learn..."></textarea>
+
+      <button id="submitBtn" onclick="runTask()">Get Answer</button>
+
+      <div id="status" class="status"></div>
+      <section id="result" class="result" aria-live="polite"></section>
+    </section>
+
+    <footer>
+      <span>EduGenie</span>
+      <span>Learn • Understand • Practice • Grow</span>
+    </footer>
+  </main>
+  <script>
+    const task = document.getElementById("task");
+    const input = document.getElementById("inputText");
+    const label = document.getElementById("inputLabel");
+    const button = document.getElementById("submitBtn");
+    const result = document.getElementById("result");
+    const status = document.getElementById("status");
+
+    const labels = {
+      qa: ["Your question", "Ask anything you want to learn...", "Get Answer"],
+      explain: ["Topic to explain", "e.g. Explain photosynthesis", "Explain"],
+      quiz: ["Passage or topic", "Paste a passage or enter a topic...", "Generate Quiz"],
+      summarize: ["Text to summarize", "Paste a long educational passage...", "Summarize"],
+      learn: ["Learning topic", "e.g. Learn SQL from beginner to advanced", "Build Path"]
+    };
+
+    task.addEventListener("change", () => {
+      const x = labels[task.value];
+      label.textContent = x[0];
+      input.placeholder = x[1];
+      button.textContent = x[2];
+      result.innerHTML = "";
+      status.textContent = "";
+    });
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, c => ({
+        "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
+      }[c]));
+    }
+
+    function renderResult(data) {
+      if (Array.isArray(data.result)) {
+        return data.result.map((q, i) => `
+          <article class="quiz-card">
+            <h3>Question ${i + 1}</h3>
+            <p>${escapeHtml(q.question || "")}</p>
+            <div class="options">
+              ${(q.options || []).map((o, j) => `
+                <button class="option" data-answer="${escapeHtml(q.answer || "")}"
+                        onclick="checkAnswer(this)">${String.fromCharCode(65+j)}. ${escapeHtml(o)}</button>
+              `).join("")}
+            </div>
+            <div class="feedback"></div>
+          </article>
+        `).join("");
+      }
+
+      return `<div class="answer">${escapeHtml(data.result || "").replace(/\\n/g, "<br>")}</div>`;
+    }
+
+    function checkAnswer(btn) {
+      const card = btn.closest(".quiz-card");
+      const feedback = card.querySelector(".feedback");
+      const correct = btn.dataset.answer;
+      const selected = btn.textContent.replace(/^[A-D]\.\s*/, "");
+      card.querySelectorAll(".option").forEach(x => x.disabled = true);
+      if (selected === correct) {
+        feedback.textContent = "✓ Correct!";
+        feedback.className = "feedback correct";
+      } else {
+        feedback.textContent = "✗ Incorrect. Correct answer: " + correct;
+        feedback.className = "feedback wrong";
+      }
+    }
+
+    async function runTask() {
+      const text = input.value.trim();
+      if (!text) {
+        status.textContent = "Please enter some text first.";
+        return;
+      }
+
+      const endpoints = {
+        qa: "/qa", explain: "/explain", quiz: "/quiz",
+        summarize: "/summarize", learn: "/learn/recommendations"
+      };
+
+      button.disabled = true;
+      status.textContent = "EduGenie is thinking...";
+      result.innerHTML = "";
+
+      try {
+        const response = await fetch(endpoints[task.value], {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(task.value === "learn" ? {topic: text} : {text})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Request failed.");
+        result.innerHTML = renderResult(data);
+        status.textContent = "";
+      } catch (err) {
+        status.textContent = "Error: " + err.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
